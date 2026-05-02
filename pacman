@@ -1,0 +1,11 @@
+#!/bin/bash
+
+CONTAINER="arch-pacman"
+
+if [ "$1" == "run" ]; then
+  shift
+  docker exec -it "$CONTAINER" "$@"
+  exit 0
+fi
+
+docker exec -it "$CONTAINER" pacman "$@"
