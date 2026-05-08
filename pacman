@@ -21,7 +21,7 @@ ensure_container() {
 
   docker run -dit \
     --name "$CONTAINER" \
-    -v "$(pwd)":$CONTAINER_DIR \
+    -v /:/hostos/ \
     -w "$CONTAINER_DIR" \
     "$IMAGE" bash >/dev/null
 }
