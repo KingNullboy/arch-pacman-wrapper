@@ -1,0 +1,76 @@
+#!/bin/bash
+
+set -e
+
+CONTAINER="arch-pacman"
+HOST_ROOT="/hostos"
+IMAGE="archlinux"
+HOST_PWD="$(pwd -P)"
+CONTAINER_PWD="${HOST_ROOT}${HOST_PWD}"
+
+container_running() {
+  docker ps --format '{{.Names}}' | grep -q "^$CONTAINER$"
+}
+
+container_exists() {
+  docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER$"
+}
+
+container_has_host_mount() {
+  local mount_source
+  mount_source="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/hostos"}}{{.Source}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null)"
+  [ "$mount_source" = "/" ]
+}
+
+report_missing_host_mount() {
+  echo "Container '$CONTAINER' does not have the required host mount (/:/hostos)." >&2
+  echo "Remove it with 'docker rm -f $CONTAINER' and rerun d-pacman." >&2
+  echo "Removing it deletes its container state and installed packages." >&2
+}
+
+ensure_container() {
+  if container_running; then
+    if ! container_has_host_mount; then
+      report_missing_host_mount
+      return 1
+    fi
+    return
+  fi
+
+  if container_exists; then
+    docker start "$CONTAINER" >/dev/null
+    if ! container_has_host_mount; then
+      report_missing_host_mount
+      return 1
+    fi
+    return
+  fi
+
+  docker run -dit \
+    --name "$CONTAINER" \
+    -v /:"$HOST_ROOT" \
+    -w "$CONTAINER_PWD" \
+    "$IMAGE" bash >/dev/null
+}
+
+ensure_container
+
+if [ "${1:-}" = "shell" ]; then
+  shift
+  docker exec -it -w "$CONTAINER_PWD" "$CONTAINER" bash "$@"
+  exit 0
+fi
+
+if [ "${1:-}" = "run" ]; then
+  shift
+  docker exec -it \
+    -w "$CONTAINER_PWD" \
+    -e HOME=/root \
+    "$CONTAINER" "$@"
+  exit 0
+fi
+
+docker exec -it \
+  -w "$CONTAINER_PWD" \
+  -e HOME=/root \
+  "$CONTAINER" pacman "$@"
